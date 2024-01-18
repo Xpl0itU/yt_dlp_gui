@@ -26,7 +26,7 @@ jobs:
 
       - name: Build Executable
         run: |
-          pyinstaller --clean --noconfirm yt_dlp_gui.spec
+          python -m PyInstaller --clean --noconfirm yt_dlp_gui.spec
           copy custom_formats.json dist/yt_dlp_gui/
           Compress-Archive -Path dist/ -DestinationPath yt_dlp_gui-Windows.zip
         shell: powershell
