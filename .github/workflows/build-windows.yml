@@ -1,0 +1,40 @@
+name: Build binaries
+on: [push]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements*.txt
+      
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+      id: setup-ffmpeg
+      with:
+        ffmpeg-version: release
+        architecture: ''
+        github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+
+      - name: Build Executable
+        run: |
+          pyinstaller --clean --noconfirm yt_dlp_gui.spec
+          copy custom_formats.json dist/yt_dlp_gui/
+          Compress-Archive -Path dist/ -DestinationPath yt_dlp_gui-Windows.zip
+        shell: powershell
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows Build
+          path: |
+            yt_dlp_gui-Windows.zip

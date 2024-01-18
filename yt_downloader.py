@@ -1,4 +1,6 @@
 import sys
+import os
+import json
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -17,26 +19,28 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QThread, Signal
 import yt_dlp
-import os
 import math
 
 
 class DownloadWorker(QThread):
     progress_signal = Signal(str, int)
 
-    def __init__(self, queue_manager, output_path, on_finish):
+    def __init__(self, queue_manager, output_path, on_finish, format_preset):
         super().__init__()
         self.queue_manager = queue_manager
         self.output_path = output_path
         self.on_finish = on_finish
+        self.format_preset = format_preset
 
     def run(self):
+        postprocessor_args = self.format_preset.get("postprocessor_args", [])
         ydl_opts = {
-            "format": "bestvideo[height<=1080][ext=mp4]",
+            "format": self.format_preset["format"],
             "outtmpl": os.path.join(self.output_path, "%(title)s.%(ext)s"),
             "progress_hooks": [self.progress_hook],
             "writesubtitles": True,
             "subtitleslangs": [],
+            "postprocessors": postprocessor_args,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             while not self.queue_manager.is_empty():
@@ -65,21 +69,22 @@ class DownloadWorker(QThread):
 
 
 class QueueManager(QWidget):
-    def __init__(self, parent_obj=None):
+    def __init__(self, parent_obj=None, custom_formats=None):
         super().__init__()
 
         self.queue = []
         self.worker = None
         self.parent_obj = parent_obj
+        self.custom_formats = custom_formats if custom_formats else []
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
 
         self.table_widget = QTableWidget(self)
-        self.table_widget.setColumnCount(4)
+        self.table_widget.setColumnCount(5)
         self.table_widget.setHorizontalHeaderLabels(
-            ["Title", "URL", "Download Subs", "Subs Language"]
+            ["Title", "URL", "Download Subs", "Subs Language", "Format Preset"]
         )
 
         buttons_layout = QHBoxLayout()
@@ -92,13 +97,14 @@ class QueueManager(QWidget):
         buttons_layout.addWidget(self.start_button)
         layout.addLayout(buttons_layout)
 
-    def add_video(self, title, url, download_subs, subs_lang):
+    def add_video(self, title, url, download_subs, subs_lang, format_preset):
         self.queue.append(
             {
                 "title": title,
                 "url": url,
                 "download_subs": download_subs,
                 "subs_lang": subs_lang,
+                "format_preset": format_preset,
             }
         )
         row_position = self.table_widget.rowCount()
@@ -107,6 +113,9 @@ class QueueManager(QWidget):
         self.table_widget.setItem(row_position, 1, QTableWidgetItem(url))
         self.table_widget.setItem(row_position, 2, QTableWidgetItem(str(download_subs)))
         self.table_widget.setItem(row_position, 3, QTableWidgetItem(subs_lang))
+        self.table_widget.setItem(
+            row_position, 4, QTableWidgetItem(format_preset["name"])
+        )
 
     def remove_selected(self):
         selected_rows = set(item.row() for item in self.table_widget.selectedItems())
@@ -128,11 +137,12 @@ class QueueManager(QWidget):
             self.parent_obj.lock_ui()
             output_path = self.parent_obj.get_output_path()
             if output_path:
+                format_preset = self.queue[0]["format_preset"]
                 self.parent_obj.append_to_log(
-                    f"Starting download with output path: {output_path}"
+                    f"Starting download with output path: {output_path}, Format Preset: {format_preset['name']}"
                 )
                 self.worker = DownloadWorker(
-                    self, output_path, self.parent_obj.unlock_ui
+                    self, output_path, self.parent_obj.unlock_ui, format_preset
                 )
                 self.worker.progress_signal.connect(self.parent_obj.update_progress)
                 self.worker.start()
@@ -149,10 +159,25 @@ class VideoDownloaderApp(QMainWindow):
         super().__init__()
 
         self.queue_manager = QueueManager(parent_obj=self)
+        self.custom_formats = []
 
+        self.load_custom_formats()
         self.init_ui()
 
+    def load_custom_formats(self):
+        try:
+            with open("custom_formats.json", "r") as file:
+                self.custom_formats = json.load(file)
+        except FileNotFoundError:
+            self.save_custom_formats()
+
+    def save_custom_formats(self):
+        with open("custom_formats.json", "w") as file:
+            json.dump(self.custom_formats, file, indent=2)
+
     def init_ui(self):
+        self.load_custom_formats()  # Load custom formats on launch
+
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
 
@@ -195,6 +220,15 @@ class VideoDownloaderApp(QMainWindow):
         subs_layout.addWidget(self.subs_lang_combobox)
         left_layout.addLayout(subs_layout)
 
+        formats_layout = QHBoxLayout()
+        self.format_label = QLabel("Format Preset:")
+        self.format_combobox = QComboBox()
+        self.populate_format_combobox()
+
+        formats_layout.addWidget(self.format_label)
+        formats_layout.addWidget(self.format_combobox)
+        left_layout.addLayout(formats_layout)
+
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
         left_layout.addWidget(self.log_output)
@@ -207,6 +241,33 @@ class VideoDownloaderApp(QMainWindow):
 
         layout.addWidget(self.queue_manager)
 
+    def populate_format_combobox(self):
+        default_formats = [
+            {
+                "name": "Best Video + Audio (MP4)",
+                "format": "best[ext=mp4]",
+            },
+            {
+                "name": "Best Audio (MP3)",
+                "format": "mp3/bestaudio/best",
+                "postprocessor_args": [
+                    {"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}
+                ],
+            },
+        ]
+        for default_format in default_formats:
+            self.format_combobox.addItem(
+                default_format["name"], userData=default_format
+            )
+
+        if self.custom_formats:
+            self.format_combobox.insertSeparator(len(default_formats))
+            for custom_format in self.custom_formats:
+                custom_format["name"] = f"{custom_format['name']} (Custom)"
+                self.format_combobox.addItem(
+                    custom_format["name"], userData=custom_format
+                )
+
     def add_to_queue(self):
         url = self.url_input.text()
         if url:
@@ -214,7 +275,10 @@ class VideoDownloaderApp(QMainWindow):
             title = video_info.get("title", "Unknown Title")
             download_subs = self.download_subs_checkbox.currentText().lower() == "true"
             subs_lang = self.subs_lang_combobox.currentText()
-            self.queue_manager.add_video(title, url, download_subs, subs_lang)
+            format_preset = self.format_combobox.currentData()
+            self.queue_manager.add_video(
+                title, url, download_subs, subs_lang, format_preset
+            )
             self.log_output.append(f"Added to queue: {url}")
             self.url_input.clear()
 
@@ -243,6 +307,7 @@ class VideoDownloaderApp(QMainWindow):
         self.subs_lang_combobox.setEnabled(False)
         self.queue_manager.remove_button.setEnabled(False)
         self.queue_manager.start_button.setEnabled(False)
+        self.format_combobox.setEnabled(False)
 
     def unlock_ui(self):
         self.url_input.setEnabled(True)
@@ -253,6 +318,24 @@ class VideoDownloaderApp(QMainWindow):
         self.subs_lang_combobox.setEnabled(True)
         self.queue_manager.remove_button.setEnabled(True)
         self.queue_manager.start_button.setEnabled(True)
+        self.format_combobox.setEnabled(True)
+        self.queue_manager.worker.quit()
+        self.queue_manager.worker = None
+
+    def start_download(self):
+        if not self.queue_manager.is_empty() and not self.queue_manager.worker:
+            format_preset = self.format_combobox.currentData()
+            self.queue_manager.start_download(format_preset)
+        elif self.queue_manager.worker:
+            self.append_to_log("Download already in progress.")
+        else:
+            self.append_to_log("Queue is empty. Add videos to the queue.")
+
+    def load_custom_formats_ui(self):
+        self.load_custom_formats()
+        self.format_combobox.clear()
+        self.populate_format_combobox()
+        self.append_to_log("Custom formats loaded.")
 
 
 def main():

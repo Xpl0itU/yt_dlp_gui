@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Best Video + Audio (Source Format Converted to MP4)",
+        "format": "best",
+        "postprocessor_args": [
+            {
+                "key": "FFmpegVideoConvertor",
+                "preferedformat": "mp4"
+            }
+        ]
+    }
+]
