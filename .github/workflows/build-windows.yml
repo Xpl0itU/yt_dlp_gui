@@ -15,7 +15,12 @@ jobs:
           architecture: 'x64'
           cache: 'pip'
           cache-dependency-path: |
-            **/requirements*.txt
+            **/requirements.txt
+            **/requirements.packaging.txt
+      
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.packaging.txt
       
       - uses: FedericoCarboni/setup-ffmpeg@v3
         id: setup-ffmpeg
