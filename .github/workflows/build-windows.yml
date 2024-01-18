@@ -2,7 +2,7 @@ name: Build binaries
 on: [push]
 
 jobs:
-  windows:
+  build:
     runs-on: windows-latest
     steps:
       - name: Check-out repository
@@ -18,11 +18,11 @@ jobs:
             **/requirements*.txt
       
       - uses: FedericoCarboni/setup-ffmpeg@v3
-      id: setup-ffmpeg
-      with:
-        ffmpeg-version: release
-        architecture: ''
-        github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+        id: setup-ffmpeg
+        with:
+          ffmpeg-version: release
+          architecture: ''
+          github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
 
       - name: Build Executable
         run: |
