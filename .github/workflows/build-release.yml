@@ -29,10 +29,15 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements.packaging.txt
       
-      - name: Install FFMpeg on macOS
+      - name: Add FFMpeg Homebrew Tap FFMpeg on macOS
         run: |
           brew tap homebrew-ffmpeg/ffmpeg
-          brew install homebrew-ffmpeg/ffmpeg/ffmpeg
+        if: runner.os != 'Windows'
+      
+      - name: Install FFMpeg on macOS
+        uses: tecolicom/actions-use-homebrew-tools@v1
+        with:
+          tools: homebrew-ffmpeg/ffmpeg/ffmpeg
         if: runner.os != 'Windows'
 
       - uses: FedericoCarboni/setup-ffmpeg@v3
