@@ -35,6 +35,14 @@ jobs:
           brew install homebrew-ffmpeg/ffmpeg/ffmpeg
         if: runner.os != 'Windows'
 
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+        id: setup-ffmpeg
+        with:
+          ffmpeg-version: release
+          architecture: ''
+          github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+        if: runner.os == 'Windows'
+
       - name: Build Executable
         run: |
           pyinstaller --clean --noconfirm yt_dlp_gui.spec
