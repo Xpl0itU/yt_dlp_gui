@@ -20,6 +20,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QThread, Signal
 import yt_dlp
 import math
+from user_data import get_user_data_dir
+
+CUSTOM_FORMAT_JSON_PATH = os.path.join(get_user_data_dir(), "custom_formats.json")
 
 
 class DownloadWorker(QThread):
@@ -166,13 +169,13 @@ class VideoDownloaderApp(QMainWindow):
 
     def load_custom_formats(self):
         try:
-            with open("custom_formats.json", "r") as file:
+            with open(CUSTOM_FORMAT_JSON_PATH, "r", encoding="utf-8") as file:
                 self.custom_formats = json.load(file)
         except FileNotFoundError:
             self.save_custom_formats()
 
     def save_custom_formats(self):
-        with open("custom_formats.json", "w") as file:
+        with open(CUSTOM_FORMAT_JSON_PATH, "w", encoding="utf-8") as file:
             json.dump(self.custom_formats, file, indent=2)
 
     def init_ui(self):
