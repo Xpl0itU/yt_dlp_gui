@@ -47,3 +47,7 @@ coll = COLLECT(
     upx_exclude=[],
     name='yt_dlp_gui',
 )
+
+app = BUNDLE(coll,
+             name='yt_dlp_gui.app',
+             bundle_identifier='io.Xpl0itU.yt_dlp_gui')
